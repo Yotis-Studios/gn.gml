@@ -11,6 +11,9 @@ function __gnInit() {
 		connections = ds_map_create();
 	
 		timeout = GN_TIMEOUT_MS;
+		onConnectHandler = GN_HANDLER_CONNECT;
+		onTimeoutHandler = GN_HANDLER_TIMEOUT;
+		onDisconnectHandler = GN_HANDLER_DISCONNECT;
 		
 		__gnInitTypes();
 	}
@@ -48,19 +51,19 @@ function __gnAsync() {
 function __gnOnConnect(conn) {
 	conn.connected = true;
 	conn.connecting = false;
-	if (GN_HANDLER_CONNECT != undefined) GN_HANDLER_CONNECT(conn);
+	if (onConnectHandler != undefined) onConnectHandler(conn);
 }
 
 function __gnOnTimeout(conn) {
 	conn.connected = false;
 	conn.connecting = false;
-	if (GN_HANDLER_DISCONNECT != undefined) GN_HANDLER_DISCONNECT(conn);
+	if (onTimeoutHandler != undefined) onTimeoutHandler(conn);
 }
 
 function __gnOnDisconnect(conn) {
 	conn.connected = false;
 	conn.connecting = false;
-	if (GN_HANDLER_TIMEOUT != undefined) GN_HANDLER_TIMEOUT(conn);
+	if (onDisconnectHandler != undefined) onDisconnectHandler(conn);
 }
 
 function __gnHandleData(conn, buf, size) {
