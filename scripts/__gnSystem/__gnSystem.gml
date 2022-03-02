@@ -1,9 +1,12 @@
-// Initialize gn library
-__gnInit();
+global.__gn = undefined;
 
 function __gnInit() {
-	// check for gn instance, create if it doesn't exist
-	global.__gn = instance_create_depth(0, 0, 0, gn);
+	// Check and set singleton
+	if (global.__gn == undefined) {
+		global.__gn = self;
+	} else {
+		instance_destroy()
+	}
 	with (global.__gn) {
 		connections = ds_map_create();
 	
