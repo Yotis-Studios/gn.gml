@@ -14,6 +14,7 @@ function __gnInit() {
 		onConnectHandler = GN_HANDLER_CONNECT;
 		onTimeoutHandler = GN_HANDLER_TIMEOUT;
 		onDisconnectHandler = GN_HANDLER_DISCONNECT;
+		onDataHandler = GN_HANDLER_DATA;
 		
 		__gnInitTypes();
 	}
@@ -68,7 +69,7 @@ function __gnOnDisconnect(conn) {
 
 function __gnHandleData(conn, buf, size) {
 	var packet = __gnParseNetworkBuffer(buf, size);
-	if (GN_HANDLER_DATA != undefined) GN_HANDLER_DATA(conn, packet[0], packet[1]);
+	if (onDataHandler != undefined) onDataHandler(conn, packet[0], packet[1]);
 }
 
 function __gnParseNetworkBuffer(buf, size) {

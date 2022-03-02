@@ -5,7 +5,7 @@
 #macro GN_TIMEOUT_MS 15000
 
 // function(conn) called when a connection is made
-#macro GN_HANDLER_CONNECT testOnConnect
+#macro GN_HANDLER_CONNECT undefined
 
 // function(conn) called when a connection attempt times out
 #macro GN_HANDLER_TIMEOUT undefined
@@ -14,4 +14,4 @@
 #macro GN_HANDLER_DISCONNECT undefined
 
 // function(conn, netId, data) called when a connection receives data
-#macro GN_HANDLER_DATA testOnData
+#macro GN_HANDLER_DATA undefined

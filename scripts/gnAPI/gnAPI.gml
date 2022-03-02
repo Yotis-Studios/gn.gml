@@ -27,3 +27,23 @@ function gn_isConnected(conn) {
 function gn_isConnecting(conn) {
 	return conn.connecting;
 }
+
+function gn_setConnectHandler(func) {
+	var _gn = global.__gn;
+	_gn.onConnectHandler = func;
+}
+
+function gn_setTimeoutHandler(func) {
+	var _gn = global.__gn;
+	_gn.onTimeoutHandler = func;
+}
+
+function gn_setDisconnectHandler(func) {
+	var _gn = global.__gn;
+	_gn.onDisconnectHandler = func;
+}
+
+function gn_setDataHandler(func) {
+	var _gn = global.__gn;
+	_gn.onDataHandler = func;
+}
