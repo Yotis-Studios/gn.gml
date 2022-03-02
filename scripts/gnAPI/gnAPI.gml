@@ -2,11 +2,11 @@
 
 function gn_connect(address, port) {
 	var _gn = global.__gn;
-	network_set_config(network_config_connect_timeout, _gn.timeout);
+	//network_set_config(network_config_connect_timeout, _gn.timeout);
 	network_set_config(network_config_use_non_blocking_socket, true);
 	
 	var socketID = network_create_socket(network_socket_ws);
-	var conn = __gnInitConnection();
+	var conn = __gnInitConnection(socketID, address, port);
 	
 	return conn;
 }
