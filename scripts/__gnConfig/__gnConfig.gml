@@ -4,6 +4,9 @@
 // Socket timeout in milliseconds
 #macro GN_TIMEOUT_MS 15000
 
+// Connect async
+#macro GN_CONNECT_ASYNC true
+
 // function(conn) called when a connection is made
 #macro GN_HANDLER_CONNECT undefined
 

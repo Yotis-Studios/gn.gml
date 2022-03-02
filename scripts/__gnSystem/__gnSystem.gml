@@ -20,6 +20,10 @@ function __gnInit() {
 	}
 }
 
+function __gnDestroy() {
+	ds_map_destroy(connections);
+}
+
 function __gnAsync() {
 	var socketID = async_load[? "id"];
 	var conn = connections[? socketID];
@@ -108,6 +112,7 @@ function __gnParseNetworkBuffer(buf, size) {
 }
 
 function __gnSendPacket(conn, packet) {
+	if (!conn.connected) return; // drop packet if not connected TODO: add to waiting queue if connecting
 	var _gn = global.__gn;
 	var buf = buffer_create(1, buffer_grow, 1);
 	// write id
@@ -158,8 +163,11 @@ function __gnInitConnection(sock, addr, prt) {
 	with (global.__gn) {
 		connections[? sock] = connection;
 	}
-	// TODO: support async connection
-	network_connect_raw(sock, addr, prt);
+	if (GN_CONNECT_ASYNC) {
+		network_connect_raw_async(sock, addr, prt);
+	} else {
+		network_connect_raw(sock, addr, prt);
+	}
 	return connection;
 }
 
