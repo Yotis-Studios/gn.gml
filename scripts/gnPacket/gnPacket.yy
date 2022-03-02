@@ -6,7 +6,7 @@
     "path": "folders/gn.yy",
   },
   "resourceVersion": "1.0",
-  "name": "__gnConfig",
+  "name": "gnPacket",
   "tags": [],
   "resourceType": "GMScript",
 }

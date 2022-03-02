@@ -2,11 +2,11 @@
   "isDnD": false,
   "isCompatibility": false,
   "parent": {
-    "name": "gn",
-    "path": "folders/gn.yy",
+    "name": "Scripts",
+    "path": "folders/Scripts.yy",
   },
   "resourceVersion": "1.0",
-  "name": "__gnConfig",
+  "name": "test",
   "tags": [],
   "resourceType": "GMScript",
 }
