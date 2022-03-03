@@ -130,6 +130,7 @@ function __gnSendPacket(conn, packet) {
 			continue; // write nothing for undefined values
 		} else if (type == buffer_array) {
 			var m = array_length(val);
+			buffer_write(buf, buffer_u8, m);
 			for (var j = 0; j < m; j++) {
 				buffer_write(buf, buffer_u8, val[j]);
 			}
