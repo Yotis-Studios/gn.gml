@@ -137,14 +137,14 @@ function __gnSendPacket(conn, packet) {
 			buffer_write(buf, type, val);
 		}
 	}
-	var packetSize = buffer_tell(buf) + 2;
+	var packetSize = buffer_tell(buf);
 	var sendBuf = buffer_create(packetSize, buffer_u8, 1);
 	buffer_write(sendBuf, buffer_u16, packetSize);
-	buffer_copy(buf, 0, packetSize-2, sendBuf, 2);
-	buffer_seek(sendBuf, 0, packetSize);
+	buffer_copy(buf, 0, packetSize, sendBuf, 2);
+	buffer_seek(sendBuf, 0, packetSize+2);
 	
 	show_debug_message("sending " + string(packetSize) + " bytes");
-	var result = network_send_raw(conn.socket, sendBuf, packetSize);
+	var result = network_send_raw(conn.socket, sendBuf, packetSize+2);
 	
 	buffer_delete(buf);
 	buffer_delete(sendBuf);
