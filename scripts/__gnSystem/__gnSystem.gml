@@ -138,7 +138,7 @@ function __gnSendPacket(conn, packet) {
 		}
 	}
 	var packetSize = buffer_tell(buf);
-	var sendBuf = buffer_create(packetSize, buffer_u8, 1);
+	var sendBuf = buffer_create(packetSize+2, buffer_fixed, 1);
 	buffer_write(sendBuf, buffer_u16, packetSize);
 	buffer_copy(buf, 0, packetSize, sendBuf, 2);
 	buffer_seek(sendBuf, 0, packetSize+2);
