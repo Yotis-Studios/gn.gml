@@ -93,17 +93,24 @@ function __gnParseNetworkBuffer(buf, size) {
 		
 			if (type == undefined) {
 				array_push(data, undefined);
-			} else if (type == buffer_array) {
-				var n = size-j;
-				var arr = array_create(n);
-				for (var i = 0; i < n; i++) {
-					arr[i] = buffer_read(buf, buffer_u8);
+			} else if (type == buffer_array || type == buffer_string) {
+				var n = buffer_read(buf, buffer_u8); // read size
+				if (type == buffer_string) {
+					var str = buffer_read(buf, buffer_string);
+					array_push(data, str);
+					j += 1;
+				} else {
+					var arr = array_create(n);
+					for (var i = 0; i < n; i++) {
+						arr[i] = buffer_read(buf, buffer_u8);
+					}
+					array_push(data, arr);
 				}
-				array_push(data, arr);
+				j += n + 1;
 			} else {
 				var val = buffer_read(buf, type);
 				array_push(data, val);
-				j += type == buffer_string ? string_length(val)+1 : _gn.sizeList[| typeIdx];
+				j += _gn.sizeList[| typeIdx];
 			}
 		}
 	}
@@ -135,6 +142,9 @@ function __gnSendPacket(conn, packet) {
 				buffer_write(buf, buffer_u8, val[j]);
 			}
 		} else {
+			if (type == buffer_string) {
+				buffer_write(buf, buffer_u8, string_length(val)+1);
+			}
 			buffer_write(buf, type, val);
 		}
 	}
