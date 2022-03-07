@@ -91,6 +91,7 @@ function __gnHandleData(conn, buf, size) {
 		if (conn.pIdx == conn.pBuffer.length) {
 			var packet = __gnParsePacket(conn.pBuffer, conn.pSize);
 			if (onDataHandler != undefined) onDataHandler(conn, packet[0], packet[1]);
+			buffer_delete(conn.pBuffer);
 			conn.pBuffer = undefined;
 		}
 	}
