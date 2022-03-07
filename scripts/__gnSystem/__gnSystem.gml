@@ -72,20 +72,37 @@ function __gnOnDisconnect(conn) {
 }
 
 function __gnHandleData(conn, buf, size) {
-	var packet = __gnParseNetworkBuffer(buf, size);
-	if (onDataHandler != undefined) onDataHandler(conn, packet[0], packet[1]);
+	buffer_seek(buf, buffer_seek_start, 0);
+	var availableData = size;
+	while (availableData > 0) {
+		if (conn.pBuffer == undefined) {
+			var packetSize = buffer_read(buf, buffer_u16);
+			availableData -= 2;
+			conn.pBuffer = buffer_create(packetSize, buffer_fixed, 1);
+			conn.pIdx = 0;
+			conn.pSize = packetSize;
+		}
+
+		var copySize = min(availableData, conn.pSize - conn.pIdx);
+		var copyIdx = size - availableData;
+		buffer_copy(buf, copyIdx, copyIdx + copySize, conn.pBuffer, conn.pIdx);
+		conn.pIdx += copySize;
+		availableData -= copySize;
+		if (conn.pIdx == conn.pBuffer.length) {
+			var packet = __gnParsePacket(conn.pBuffer, conn.pSize);
+			if (onDataHandler != undefined) onDataHandler(conn, packet[0], packet[1]);
+			conn.pBuffer = undefined;
+		}
+	}
 }
 
-function __gnParseNetworkBuffer(buf, size) {
+function __gnParsePacket(buf, size) {
 	var _gn = global.__gn;
-	buffer_seek(buf, buffer_seek_start, 0);
-	var pSize = buffer_read(buf, buffer_u16);
 	var netID = buffer_read(buf, buffer_u16);
 	
 	var data = [];
-	size = min(size, pSize);
-	if (size > 4) {
-		var j = 4;
+	if (size > 2) {
+		var j = 2;
 		while (j < size) {
 			var typeIdx = buffer_read(buf, buffer_u8);
 			var type = _gn.typeList[| typeIdx];
