@@ -21,18 +21,19 @@ function testOnConnect(conn) {
 	//gn_packetAdd(packet, 12);
 	//gn_send(conn, packet);
 	
-	//var packet = gn_packet(69);
-	//gn_packetAdd(packet, 15);
-	//gn_packetAdd(packet, "Hello World!");
-	//gn_packetAdd(packet, true);
-	//gn_send(conn, packet);
-	for (var i = 0; i < 100; i++) {
-		var sn_packet = gn_packet(69);
-		gn_packetAdd(sn_packet, 4234234);
-		gn_packetAdd(sn_packet, -4234234);
-		gn_packetAdd(sn_packet, 5.345234);
-		gn_send(conn, sn_packet);
-	}
+	var packet = gn_packet(69);
+	gn_packetAdd(packet, 15);
+	gn_packetAdd(packet, "Hello World!");
+	gn_packetAdd(packet, [0, 1, 2, 3]);
+	gn_packetAdd(packet, true);
+	gn_send(conn, packet);
+	//for (var i = 0; i < 100; i++) {
+	//	var sn_packet = gn_packet(69);
+	//	gn_packetAdd(sn_packet, 4234234);
+	//	gn_packetAdd(sn_packet, -4234234);
+	//	gn_packetAdd(sn_packet, 5.345234);
+	//	gn_send(conn, sn_packet);
+	//}
 }
 
 function testOnData(conn, netID, data) {

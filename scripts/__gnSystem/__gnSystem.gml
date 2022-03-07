@@ -173,7 +173,6 @@ function __gnSendPacket(conn, packet) {
 	buffer_copy(buf, 0, packetSize, sendBuf, 2);
 	buffer_seek(sendBuf, 0, packetSize+2);
 	
-	show_debug_message("sending " + string(packetSize) + " bytes");
 	var result = network_send_raw(conn.socket, sendBuf, packetSize+2);
 	
 	buffer_delete(buf);
