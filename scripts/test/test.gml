@@ -27,7 +27,7 @@ function testOnConnect(conn) {
 	//gn_packetAdd(packet, true);
 	//gn_send(conn, packet);
 	for (var i = 0; i < 100; i++) {
-		var sn_packet = gn_packet(15);
+		var sn_packet = gn_packet(69);
 		gn_packetAdd(sn_packet, 4234234);
 		gn_packetAdd(sn_packet, -4234234);
 		gn_packetAdd(sn_packet, 5.345234);

@@ -85,7 +85,8 @@ function __gnHandleData(conn, buf, size) {
 
 		var copySize = min(availableData, conn.pSize - conn.pIdx);
 		var copyIdx = size - availableData;
-		buffer_copy(buf, copyIdx, copyIdx + copySize, conn.pBuffer, conn.pIdx);
+		buffer_copy(buf, copyIdx, copySize, conn.pBuffer, conn.pIdx);
+		buffer_seek(buf, buffer_seek_relative, copySize);
 		conn.pIdx += copySize;
 		availableData -= copySize;
 		if (conn.pIdx == conn.pSize) {
