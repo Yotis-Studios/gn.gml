@@ -88,7 +88,7 @@ function __gnHandleData(conn, buf, size) {
 		buffer_copy(buf, copyIdx, copyIdx + copySize, conn.pBuffer, conn.pIdx);
 		conn.pIdx += copySize;
 		availableData -= copySize;
-		if (conn.pIdx == conn.pBuffer.length) {
+		if (conn.pIdx == conn.pSize) {
 			var packet = __gnParsePacket(conn.pBuffer, conn.pSize);
 			if (onDataHandler != undefined) onDataHandler(conn, packet[0], packet[1]);
 			buffer_delete(conn.pBuffer);
@@ -187,7 +187,10 @@ function __gnInitConnection(sock, addr, prt) {
 		address : addr,
 		port : prt,
 		connecting : true,
-		connected : false
+		connected : false,
+		pBuffer : undefined,
+		pIdx : 0,
+		pSize : 0
 	};
 	with (global.__gn) {
 		connections[? sock] = connection;
