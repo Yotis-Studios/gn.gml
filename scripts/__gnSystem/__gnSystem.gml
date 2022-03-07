@@ -9,6 +9,7 @@ function __gnInit() {
 	}
 	with (global.__gn) {
 		connections = ds_map_create();
+		servers = ds_map_create();
 	
 		timeout = GN_TIMEOUT_MS;
 		onConnectHandler = GN_HANDLER_CONNECT;
@@ -22,6 +23,9 @@ function __gnInit() {
 
 function __gnDestroy() {
 	ds_map_destroy(connections);
+	ds_map_destroy(typeMap);
+	ds_list_destroy(typeList);
+	ds_list_destroy(sizeList);
 }
 
 function __gnAsync() {
@@ -181,6 +185,12 @@ function __gnSendPacket(conn, packet) {
 	return result;
 }
 
+function __gnSetNetworkConfig() {
+	var _gn = global.__gn;
+	network_set_config(network_config_connect_timeout, _gn.timeout);
+	network_set_config(network_config_use_non_blocking_socket, true);
+}
+
 function __gnInitConnection(sock, addr, prt) {
 	var connection = {
 		socket : sock,
@@ -201,6 +211,19 @@ function __gnInitConnection(sock, addr, prt) {
 		network_connect_raw(sock, addr, prt);
 	}
 	return connection;
+}
+
+function __gnInitServer(sock, prt) {
+	var server = {
+		connections : [],
+		port : prt,
+		socket : sock
+	};
+	with (global.__gn) {
+		servers[? sock] = server;
+	}
+	
+	return server;
 }
 
 function __gnType(val) {

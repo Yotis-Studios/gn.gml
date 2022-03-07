@@ -1,13 +1,9 @@
 // gn library API
 
 function gn_connect(address, port) {
-	var _gn = global.__gn;
-	network_set_config(network_config_connect_timeout, _gn.timeout);
-	network_set_config(network_config_use_non_blocking_socket, true);
-	
+	__gnSetNetworkConfig();
 	var socketID = network_create_socket(GN_SOCKET_TYPE);
 	var conn = __gnInitConnection(socketID, address, port);
-	
 	return conn;
 }
 
@@ -18,6 +14,10 @@ function gn_disconnect(conn) {
 
 function gn_send(conn, packet) {
 	__gnSendPacket(conn, packet);
+}
+
+function gn_broadcast(server, packet) {
+	//
 }
 
 function gn_isConnected(conn) {
@@ -47,3 +47,15 @@ function gn_setDataHandler(func) {
 	var _gn = global.__gn;
 	_gn.onDataHandler = func;
 }
+
+//function gn_listen(port) {
+//	__gnSetNetworkConfig();
+//	var socket = network_create_server_raw(GN_SOCKET_TYPE, port, GN_MAX_CLIENTS);
+//	var server = __gnInitServer(socket, port);
+//	return server;
+//}
+
+//function gn_close(server) {
+//	_gnOnServerDisconnect(server);
+//	network_destroy(server.socket);
+//}

@@ -1,6 +1,9 @@
 // Socket protocol type
 #macro GN_SOCKET_TYPE network_socket_ws
 
+// Max clients for GM hosted server
+#macro GN_MAX_CLIENTS 32
+
 // Socket timeout in milliseconds
 #macro GN_TIMEOUT_MS 15000
 
