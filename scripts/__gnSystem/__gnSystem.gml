@@ -60,19 +60,22 @@ function __gnAsync() {
 function __gnOnConnect(conn) {
 	conn.connected = true;
 	conn.connecting = false;
-	if (onConnectHandler != undefined) onConnectHandler(conn);
+	var _gn = global.__gn;
+	if (_gn.onConnectHandler != undefined) _gn.onConnectHandler(conn);
 }
 
 function __gnOnTimeout(conn) {
 	conn.connected = false;
 	conn.connecting = false;
-	if (onTimeoutHandler != undefined) onTimeoutHandler(conn);
+	var _gn = global.__gn;
+	if (_gn.onTimeoutHandler != undefined) _gn.onTimeoutHandler(conn);
 }
 
 function __gnOnDisconnect(conn) {
 	conn.connected = false;
 	conn.connecting = false;
-	if (onDisconnectHandler != undefined) onDisconnectHandler(conn);
+	var _gn = global.__gn;
+	if (_gn.onDisconnectHandler != undefined) _gn.onDisconnectHandler(conn);
 }
 
 function __gnHandleData(conn, buf, size) {
