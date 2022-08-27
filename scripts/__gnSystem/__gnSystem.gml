@@ -169,7 +169,11 @@ function __gnSendPacket(conn, packet) {
 			}
 		} else {
 			if (type == buffer_string) {
-				buffer_write(buf, buffer_u8, string_length(val)+1);
+				var strBuf = buffer_create(string_length(val)+1, buffer_grow, 1);
+				buffer_write(strBuf, buffer_string, val);
+				var strBufLen = buffer_tell(strBuf);
+				buffer_write(buf, buffer_u8, strBufLen);
+				buffer_delete(strBuf);
 			}
 			buffer_write(buf, type, val);
 		}
