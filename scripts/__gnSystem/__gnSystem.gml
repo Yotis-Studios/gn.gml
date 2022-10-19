@@ -122,9 +122,15 @@ function __gnParsePacket(buf, size) {
 			} else if (type == buffer_array || type == buffer_string) {
 				var n = buffer_read(buf, buffer_u8); // read size
 				if (type == buffer_string) {
-					var str = buffer_read(buf, buffer_string);
+					var strbuf = buffer_create(n, buffer_fixed, 1);
+					for (var i = 0; i < n; i++) {
+						var byte = buffer_read(buf, buffer_u8);
+						buffer_write(strbuf, buffer_u8, byte);
+					}
+					buffer_seek(strbuf, buffer_seek_start, 0);
+					var str = buffer_read(strbuf, buffer_string);
+					buffer_delete(strbuf);
 					array_push(data, str);
-					j += 1;
 				} else {
 					var arr = array_create(n);
 					for (var i = 0; i < n; i++) {
