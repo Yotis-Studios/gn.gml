@@ -176,10 +176,11 @@ function __gnSendPacket(conn, packet) {
 		} else {
 			if (type == buffer_string) {
 				var strBuf = buffer_create(string_length(val)+1, buffer_grow, 1);
-				buffer_write(strBuf, buffer_string, val);
+				buffer_write(strBuf, buffer_text, val);
 				var strBufLen = buffer_tell(strBuf);
 				buffer_write(buf, buffer_u8, strBufLen);
 				buffer_delete(strBuf);
+				type = buffer_text;
 			}
 			buffer_write(buf, type, val);
 		}
