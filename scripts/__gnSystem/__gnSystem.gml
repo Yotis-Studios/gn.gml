@@ -120,7 +120,7 @@ function __gnParsePacket(buf, size) {
 			if (type == undefined) {
 				array_push(data, undefined);
 			} else if (type == buffer_array || type == buffer_string) {
-				var n = buffer_read(buf, buffer_u8); // read size
+				var n = buffer_read(buf, buffer_u16); // read size
 				if (type == buffer_string) {
 					var strbuf = buffer_create(n, buffer_fixed, 1);
 					for (var i = 0; i < n; i++) {
@@ -178,7 +178,7 @@ function __gnSendPacket(conn, packet) {
 				var strBuf = buffer_create(string_length(val)+1, buffer_grow, 1);
 				buffer_write(strBuf, buffer_text, val);
 				var strBufLen = buffer_tell(strBuf);
-				buffer_write(buf, buffer_u8, strBufLen);
+				buffer_write(buf, buffer_u16, strBufLen);
 				buffer_delete(strBuf);
 				type = buffer_text;
 			}
