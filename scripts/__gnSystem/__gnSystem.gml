@@ -120,7 +120,7 @@ function __gnParsePacket(buf, size) {
 			if (type == undefined) {
 				array_push(data, undefined);
 			} else if (type == buffer_array || type == buffer_string) {
-				var n = buffer_read(buf, buffer_u16); // read size
+				var n = buffer_read(buf, type == buffer_string ? buffer_u16 : buffer_u8); // read size
 				if (type == buffer_string) {
 					var strbuf = buffer_create(n, buffer_fixed, 1);
 					for (var i = 0; i < n; i++) {
