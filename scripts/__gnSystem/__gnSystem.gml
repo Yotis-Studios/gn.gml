@@ -138,7 +138,7 @@ function __gnParsePacket(buf, size) {
 					}
 					array_push(data, arr);
 				}
-				j += n + 1;
+				j += n + (buffer_string ? 2 : 1);
 			} else {
 				var val = buffer_read(buf, type);
 				array_push(data, val);
