@@ -5,7 +5,8 @@ function __gnInit() {
 	if (global.__gn == undefined) {
 		global.__gn = self;
 	} else {
-		instance_destroy()
+		instance_destroy();
+		return; // Don't continue executing after destroying this instance
 	}
 	with (global.__gn) {
 		connections = ds_map_create();
@@ -22,7 +23,23 @@ function __gnInit() {
 }
 
 function __gnDestroy() {
+	// Clean up all connections before destroying the map
+	var key = ds_map_find_first(connections);
+	while (!is_undefined(key)) {
+		var conn = connections[? key];
+		if (conn != undefined) {
+			// Clean up partial packet buffer if it exists
+			if (conn.pBuffer != undefined) {
+				buffer_delete(conn.pBuffer);
+			}
+			// Destroy the socket
+			network_destroy(conn.socket);
+		}
+		key = ds_map_find_next(connections, key);
+	}
+
 	ds_map_destroy(connections);
+	ds_map_destroy(servers);
 	ds_map_destroy(typeMap);
 	ds_list_destroy(typeList);
 	ds_list_destroy(sizeList);
@@ -31,8 +48,13 @@ function __gnDestroy() {
 function __gnAsync() {
 	var socketID = async_load[? "id"];
 	var conn = connections[? socketID];
-	//var ip = async_load[? "ip"];
-	//var port = async_load[? "port"];
+
+	// Check if this is a valid connection
+	if (conn == undefined) {
+		show_debug_message("WARNING: Received async event for unknown socket " + string(socketID));
+		return;
+	}
+
 	var success = async_load[? "succeeded"];
 	
 	switch (async_load[? "type"]) {
@@ -85,6 +107,14 @@ function __gnHandleData(conn, buf, size) {
 		if (conn.pBuffer == undefined) {
 			var packetSize = buffer_read(buf, buffer_u16);
 			availableData -= 2;
+
+			// Validate packet size to prevent memory exhaustion attacks
+			if (packetSize <= 0 || packetSize > GN_MAX_PACKET_SIZE) {
+				show_debug_message("WARNING: Invalid packet size " + string(packetSize) + " from connection. Disconnecting.");
+				gn_disconnect(conn);
+				return;
+			}
+
 			conn.pBuffer = buffer_create(packetSize, buffer_fixed, 1);
 			conn.pIdx = 0;
 			conn.pSize = packetSize;
@@ -120,13 +150,22 @@ function __gnParsePacket(buf, size) {
 			if (type == undefined) {
 				array_push(data, undefined);
 			} else if (type == buffer_array || type == buffer_string) {
-				var n = buffer_read(buf, type == buffer_string ? buffer_u16 : buffer_u8); // read size
+				var sizeBytes = (type == buffer_string ? 2 : 1);
+			var n = buffer_read(buf, type == buffer_string ? buffer_u16 : buffer_u8); // read size
+
+			// Validate that there's enough data remaining in the packet
+			if (j + sizeBytes + n > size) {
+				show_debug_message("WARNING: String/array size " + string(n) + " exceeds packet bounds. Packet corrupted.");
+				return [netID, data]; // Return partial data
+			}
 				if (type == buffer_string) {
-					var strbuf = buffer_create(n, buffer_fixed, 1);
+					var strbuf = buffer_create(n + 1, buffer_fixed, 1);
 					for (var i = 0; i < n; i++) {
 						var byte = buffer_read(buf, buffer_u8);
 						buffer_write(strbuf, buffer_u8, byte);
 					}
+					// Add null terminator for buffer_string
+					buffer_write(strbuf, buffer_u8, 0);
 					buffer_seek(strbuf, buffer_seek_start, 0);
 					var str = buffer_read(strbuf, buffer_string);
 					buffer_delete(strbuf);
@@ -138,7 +177,7 @@ function __gnParsePacket(buf, size) {
 					}
 					array_push(data, arr);
 				}
-				j += n + (buffer_string ? 2 : 1);
+				j += n + (type == buffer_string ? 2 : 1);
 			} else {
 				var val = buffer_read(buf, type);
 				array_push(data, val);
@@ -175,12 +214,15 @@ function __gnSendPacket(conn, packet) {
 			}
 		} else {
 			if (type == buffer_string) {
-				var strBuf = buffer_create(string_length(val)+1, buffer_grow, 1);
-				buffer_write(strBuf, buffer_text, val);
-				var strBufLen = buffer_tell(strBuf);
-				buffer_write(buf, buffer_u16, strBufLen);
-				buffer_delete(strBuf);
-				type = buffer_text;
+				// Write string length (without null terminator)
+				var strLen = string_byte_length(val);
+				buffer_write(buf, buffer_u16, strLen);
+				// Write string as text (this includes null terminator but we'll send exact bytes)
+				var tempPos = buffer_tell(buf);
+				buffer_write(buf, buffer_text, val);
+				// Adjust buffer position to exclude the null terminator
+				buffer_seek(buf, buffer_seek_start, tempPos + strLen);
+				continue; // Skip the normal buffer_write since we already wrote the string
 			}
 			buffer_write(buf, type, val);
 		}

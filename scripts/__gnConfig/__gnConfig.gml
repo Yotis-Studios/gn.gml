@@ -7,6 +7,9 @@
 // Socket timeout in milliseconds
 #macro GN_TIMEOUT_MS 15000
 
+// Maximum packet size in bytes (prevent memory exhaustion attacks)
+#macro GN_MAX_PACKET_SIZE 65536
+
 // Connect async
 #macro GN_CONNECT_ASYNC true
 
