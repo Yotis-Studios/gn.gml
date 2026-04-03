@@ -12,5 +12,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run GML checks
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run GML syntax & structural checks
         run: bash ci/check_gml.sh
+
+      - name: Run GML parser diagnostics
+        run: node ci/check_gml.mjs

@@ -1,0 +1,11 @@
+{
+  "name": "gn.gml",
+  "private": true,
+  "description": "GameMaker networking library",
+  "scripts": {
+    "check": "bash ci/check_gml.sh && node ci/check_gml.mjs"
+  },
+  "devDependencies": {
+    "@bscotch/gml-parser": "^1.17.2"
+  }
+}

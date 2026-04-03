@@ -1,2 +1,5 @@
 # Ignore .yy files (for GMS 2 projects)
 *.yy linguist-vendored
+
+# Node
+node_modules/
