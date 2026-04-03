@@ -13,7 +13,7 @@ function gn_disconnect(conn) {
 }
 
 function gn_send(conn, packet) {
-	__gnSendPacket(conn, packet);
+	return __gnSendPacket(conn, packet);
 }
 
 function gn_broadcast(server, packet) {

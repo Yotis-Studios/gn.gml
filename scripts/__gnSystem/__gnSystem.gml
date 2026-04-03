@@ -22,6 +22,15 @@ function __gnInit() {
 }
 
 function __gnDestroy() {
+	// Clean up any in-progress packet buffers
+	var _key = ds_map_find_first(connections);
+	while (_key != undefined) {
+		var _conn = connections[? _key];
+		if (_conn.pBuffer != undefined) {
+			buffer_delete(_conn.pBuffer);
+		}
+		_key = ds_map_find_next(connections, _key);
+	}
 	ds_map_destroy(connections);
 	ds_map_destroy(typeMap);
 	ds_list_destroy(typeList);
@@ -31,10 +40,11 @@ function __gnDestroy() {
 function __gnAsync() {
 	var socketID = async_load[? "id"];
 	var conn = connections[? socketID];
+	if (conn == undefined) return;
 	//var ip = async_load[? "ip"];
 	//var port = async_load[? "port"];
 	var success = async_load[? "succeeded"];
-	
+
 	switch (async_load[? "type"]) {
 		case network_type_non_blocking_connect:
 			if (success) {
@@ -75,6 +85,11 @@ function __gnOnDisconnect(conn) {
 	conn.connected = false;
 	conn.connecting = false;
 	var _gn = global.__gn;
+	if (conn.pBuffer != undefined) {
+		buffer_delete(conn.pBuffer);
+		conn.pBuffer = undefined;
+	}
+	ds_map_delete(_gn.connections, conn.socket);
 	if (_gn.onDisconnectHandler != undefined) _gn.onDisconnectHandler(conn);
 }
 
@@ -98,7 +113,8 @@ function __gnHandleData(conn, buf, size) {
 		availableData -= copySize;
 		if (conn.pIdx == conn.pSize) {
 			var packet = __gnParsePacket(conn.pBuffer, conn.pSize);
-			if (onDataHandler != undefined) onDataHandler(conn, packet[0], packet[1]);
+			var _gn = global.__gn;
+			if (_gn.onDataHandler != undefined) _gn.onDataHandler(conn, packet[0], packet[1]);
 			buffer_delete(conn.pBuffer);
 			conn.pBuffer = undefined;
 		}
@@ -138,7 +154,7 @@ function __gnParsePacket(buf, size) {
 					}
 					array_push(data, arr);
 				}
-				j += n + (buffer_string ? 2 : 1);
+				j += n + (type == buffer_string ? 2 : 1);
 			} else {
 				var val = buffer_read(buf, type);
 				array_push(data, val);
@@ -166,7 +182,7 @@ function __gnSendPacket(conn, packet) {
 		buffer_write(buf, buffer_u8, _gn.typeMap[? type]);
 		// write data to buffer
 		if (type == undefined) {
-			continue; // write nothing for undefined values
+			continue;
 		} else if (type == buffer_array) {
 			var m = array_length(val);
 			buffer_write(buf, buffer_u8, m);
@@ -175,21 +191,24 @@ function __gnSendPacket(conn, packet) {
 			}
 		} else {
 			if (type == buffer_string) {
-				var strBuf = buffer_create(string_length(val)+1, buffer_grow, 1);
-				buffer_write(strBuf, buffer_text, val);
-				var strBufLen = buffer_tell(strBuf);
-				buffer_write(buf, buffer_u16, strBufLen);
-				buffer_delete(strBuf);
-				type = buffer_text;
+				var sizePos = buffer_tell(buf);
+				buffer_write(buf, buffer_u16, 0); // placeholder for size
+				buffer_write(buf, buffer_text, val);
+				var endPos = buffer_tell(buf);
+				var strBytelen = endPos - sizePos - 2;
+				buffer_seek(buf, buffer_seek_start, sizePos);
+				buffer_write(buf, buffer_u16, strBytelen);
+				buffer_seek(buf, buffer_seek_start, endPos);
+			} else {
+				buffer_write(buf, type, val);
 			}
-			buffer_write(buf, type, val);
 		}
 	}
 	var packetSize = buffer_tell(buf);
 	var sendBuf = buffer_create(packetSize+2, buffer_fixed, 1);
 	buffer_write(sendBuf, buffer_u16, packetSize);
 	buffer_copy(buf, 0, packetSize, sendBuf, 2);
-	buffer_seek(sendBuf, 0, packetSize+2);
+	buffer_seek(sendBuf, buffer_seek_start, packetSize+2);
 	
 	var result = network_send_raw(conn.socket, sendBuf, packetSize+2);
 	
@@ -255,10 +274,10 @@ function __gnType(val) {
 		// integer
 		if (val < 0) {
 			// negatives must be signed
-			if (abs(val) <= 127) {
+			if (val >= -128) {
 				return buffer_s8;
 			}
-			if (abs(val) <= 32767) {
+			if (val >= -32768) {
 				return buffer_s16;
 			}
 			return buffer_s32;
