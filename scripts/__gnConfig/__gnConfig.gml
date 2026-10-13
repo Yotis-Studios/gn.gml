@@ -21,3 +21,7 @@
 
 // function(conn, netId, data) called when a connection receives data
 #macro GN_HANDLER_DATA undefined
+
+// function(message, exception) called when an incoming packet cannot be parsed.
+// Left undefined, the fault is written with show_debug_message and dropped.
+#macro GN_HANDLER_ERROR undefined

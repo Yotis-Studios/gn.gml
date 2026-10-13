@@ -48,6 +48,11 @@ function gn_setDataHandler(func) {
 	_gn.onDataHandler = func;
 }
 
+function gn_setErrorHandler(func) {
+	var _gn = global.__gn;
+	_gn.onErrorHandler = func;
+}
+
 //function gn_listen(port) {
 //	__gnSetNetworkConfig();
 //	var socket = network_create_server_raw(GN_SOCKET_TYPE, port, GN_MAX_CLIENTS);
