@@ -1,5 +1,16 @@
 // gn.gml client, internals. Public API is in gnAPI; configuration in __gnConfig.
-#macro __GN_VERSION "1.1.0"
+#macro __GN_VERSION "1.2.0"
+
+// Encoding limits from gn.js PROTOCOL.md. The encoder throws on anything outside them, which
+// is what the other implementations do; a value that cannot cross the wire is a programming
+// error at the call site, not something to truncate silently.
+#macro __GN_MAX_NET_ID 65535
+#macro __GN_MAX_U32 4294967295
+#macro __GN_MIN_S32 -2147483648
+#macro __GN_MAX_STRING_BYTES 65534
+#macro __GN_MAX_ARRAY 255
+#macro __GN_MAX_PAYLOAD 65535
+#macro __GN_F32_LIMIT 16777216
 
 global.__gn = undefined;
 
@@ -123,6 +134,38 @@ function __gnOnError(message, ex) {
 	show_debug_message("[gn] " + message + ": " + string(ex));
 }
 
+/// @description Split a message into packets. Returns {packets, consumed, stop}: `packets` are
+/// [netId, values] pairs in order, `consumed` is how many bytes were used, and `stop` is true
+/// when parsing ended on a fault (a zero size), which per PROTOCOL.md drops the rest of the
+/// message. A size that runs past the end is not a fault here: the caller decides whether the
+/// remainder is a body still in flight (a stream) or corruption (a whole message).
+function __gnParseFrames(buf, size) {
+	var out = {};
+	out.packets = [];
+	out.consumed = 0;
+	out.stop = false;
+	var off = 0;
+	while (size - off >= 2) {
+		buffer_seek(buf, buffer_seek_start, off);
+		var packetSize = buffer_read(buf, buffer_u16);
+		if (packetSize == 0) {
+			// A zero-size packet cannot carry a net id. It ends parsing; whatever follows is
+			// unreadable, since there is no way to know where the next header is.
+			out.stop = true;
+			out.consumed = size;
+			return out;
+		}
+		if (size - off - 2 < packetSize) break;   // header seen, body not all here
+		var pbuf = buffer_create(packetSize, buffer_fixed, 1);
+		buffer_copy(buf, off + 2, packetSize, pbuf, 0);
+		array_push(out.packets, __gnParsePacket(pbuf, packetSize));
+		buffer_delete(pbuf);
+		off += 2 + packetSize;
+	}
+	out.consumed = off;
+	return out;
+}
+
 function __gnHandleData(conn, buf, size) {
 	// TCP IS A STREAM, NOT A SEQUENCE OF MESSAGES. What arrives in one async event is whatever the
 	// network chose to deliver: half a packet, three packets, or one byte. The previous version
@@ -132,7 +175,9 @@ function __gnHandleData(conn, buf, size) {
 	//
 	// So everything unconsumed is CARRIED to the next event, and packets are only parsed once
 	// wholly present. The carry is the fix: a length prefix split across two reads is the ordinary
-	// case under load, not an edge case.
+	// case under load, not an edge case. This is the one place this client knowingly differs
+	// from PROTOCOL.md, which treats an over-long size as corruption and drops the rest: a
+	// WebSocket delivers whole messages to gn.js and gn.hml, and GameMaker's socket may not.
 	var _gn = global.__gn;
 	var carryLen = (conn.carry == undefined) ? 0 : conn.carryLen;
 	var total = carryLen + size;
@@ -147,24 +192,15 @@ function __gnHandleData(conn, buf, size) {
 		conn.carryLen = 0;
 	}
 
-	var off = 0;
-	var packets = [];
-	while (total - off >= 2) {
-		buffer_seek(stream, buffer_seek_start, off);
-		var packetSize = buffer_read(stream, buffer_u16);
-		if (total - off - 2 < packetSize) break;   // header seen, body still in flight
-
-		var pbuf = buffer_create(max(1, packetSize), buffer_fixed, 1);
-		if (packetSize > 0) buffer_copy(stream, off + 2, packetSize, pbuf, 0);
-		array_push(packets, __gnParsePacket(pbuf, packetSize));
-		buffer_delete(pbuf);
-		off += 2 + packetSize;
+	var parsed = __gnParseFrames(stream, total);
+	var packets = parsed.packets;
+	var rem = parsed.stop ? 0 : total - parsed.consumed;
+	if (parsed.stop) {
+		__gnOnError("zero-size frame; the rest of this message was dropped", undefined);
 	}
-
-	var rem = total - off;
 	if (rem > 0) {
 		conn.carry = buffer_create(rem, buffer_fixed, 1);
-		buffer_copy(stream, off, rem, conn.carry, 0);
+		buffer_copy(stream, parsed.consumed, rem, conn.carry, 0);
 		conn.carryLen = rem;
 	}
 	buffer_delete(stream);
@@ -182,63 +218,130 @@ function __gnHandleData(conn, buf, size) {
 	}
 }
 
+/// @description Decode one packet body (no size header). Returns [netId, values]; netId is
+/// undefined when the body is shorter than two bytes. Every read is bounds-checked against
+/// `size`, so a truncated value, a length past the end or an unknown type ends decoding and
+/// returns the values read so far -- the behaviour PROTOCOL.md specifies and the shared vectors
+/// test. Nothing here relies on what the runtime does when reading past a buffer.
 function __gnParsePacket(buf, size) {
 	var _gn = global.__gn;
-	var netID = buffer_read(buf, buffer_u16);
-
 	var data = [];
-	if (size > 2) {
-		try {
-		var j = 2;
+	if (size < 2) return [undefined, data];
+	buffer_seek(buf, buffer_seek_start, 0);
+	var netID = buffer_read(buf, buffer_u16);
+	var j = 2;
+	try {
 		while (j < size) {
 			var typeIdx = buffer_read(buf, buffer_u8);
-			var type = _gn.typeList[| typeIdx];
 			j += 1;
+			if (typeIdx >= ds_list_size(_gn.typeList)) break;        // unknown type: stop
+			var type = _gn.typeList[| typeIdx];
 
 			if (type == undefined) {
 				array_push(data, undefined);
-			} else if (type == buffer_array || type == buffer_string) {
-				var n = buffer_read(buf, type == buffer_string ? buffer_u16 : buffer_u8); // read size
-				if (type == buffer_string) {
-					var strbuf = buffer_create(n, buffer_fixed, 1);
-					for (var i = 0; i < n; i++) {
-						var byte = buffer_read(buf, buffer_u8);
-						buffer_write(strbuf, buffer_u8, byte);
-					}
-					buffer_seek(strbuf, buffer_seek_start, 0);
-					var str = buffer_read(strbuf, buffer_string);
-					buffer_delete(strbuf);
-					array_push(data, str);
-				} else {
-					var arr = array_create(n);
-					for (var i = 0; i < n; i++) {
-						arr[i] = buffer_read(buf, buffer_u8);
-					}
-					array_push(data, arr);
-				}
-				// `type == buffer_string`, NOT `buffer_string`. This read `(buffer_string ? 2 : 1)`,
-				// and buffer_string is a CONSTANT -- always truthy, so the cursor always advanced by
-				// two. Correct for a string (type byte + u16 length + n) and wrong for an array, whose
-				// length prefix is a u8 and which therefore consumes n + 2 in total, not n + 3.
-				//
-				// `j` is the loop bound, so over-counting it ends the loop early: ANY FIELD AFTER AN
-				// ARRAY IN THE SAME PACKET WAS SILENTLY DROPPED. The catch below blamed "an extra null
-				// terminator on a chat message", which is the same symptom read from the wrong end.
-				j += n + (type == buffer_string ? 2 : 1);
+			} else if (type == buffer_string) {
+				if (j + 2 > size) break;                              // length field truncated
+				var n = buffer_read(buf, buffer_u16);
+				j += 2;
+				if (j + n > size) break;                              // string runs past the end
+				// Copy n bytes into a buffer one longer, so a string sent without its NUL still
+				// terminates; buffer_string stops at the first NUL either way.
+				var strbuf = buffer_create(n + 1, buffer_fixed, 1);
+				buffer_fill(strbuf, 0, buffer_u8, 0, n + 1);
+				if (n > 0) buffer_copy(buf, j, n, strbuf, 0);
+				buffer_seek(strbuf, buffer_seek_start, 0);
+				var str = buffer_read(strbuf, buffer_string);
+				buffer_delete(strbuf);
+				array_push(data, str);
+				j += n;
+				buffer_seek(buf, buffer_seek_start, j);
+			} else if (type == buffer_array) {
+				if (j + 1 > size) break;                              // length field missing
+				var n = buffer_read(buf, buffer_u8);
+				j += 1;
+				if (j + n > size) break;                              // array runs past the end
+				var arr = array_create(n);
+				for (var i = 0; i < n; i++) arr[i] = buffer_read(buf, buffer_u8);
+				array_push(data, arr);
+				j += n;
 			} else {
-				var val = buffer_read(buf, type);
-				array_push(data, val);
-				j += _gn.sizeList[| typeIdx];
+				var k = _gn.sizeList[| typeIdx];
+				if (j + k > size) break;                              // value truncated
+				array_push(data, buffer_read(buf, type));
+				j += k;
 			}
 		}
-		} catch (ex) {
-			// Whatever was decoded before the fault is still returned; the handler decides whether a
-			// partial packet for this net id is usable.
-			__gnOnError("packet deserialization failed, net id " + string(netID), ex);
+	} catch (ex) {
+		// Whatever was decoded before the fault is still returned; the handler decides whether a
+		// partial packet for this net id is usable.
+		__gnOnError("packet deserialization failed, net id " + string(netID), ex);
+	}
+	return [netID, data];
+}
+
+/// @description Encode a packet ([netId, [value, type], ...]) into a new fixed buffer that
+/// starts with the u16 size of the body. Throws on anything PROTOCOL.md says cannot be
+/// encoded: a net id above u16, an integer outside u32/s32, a string over 65534 bytes, an
+/// array over 255 entries, a body over 65535 bytes. The caller owns the returned buffer.
+function __gnEncodePacket(packet) {
+	var _gn = global.__gn;
+	var netID = packet[0];
+	// Enum members and json_parse integers are int64 and small buffer reads are int32 in this
+	// runtime, and is_real() is false for both; a net id from an enum must not be refused.
+	if (!(is_real(netID) || is_int64(netID) || is_int32(netID)) || netID < 0 || netID > __GN_MAX_NET_ID || netID != floor(netID)) {
+		throw ("gn: net id " + string(netID) + " is outside u16");
+	}
+	var buf = buffer_create(64, buffer_grow, 1);
+	buffer_write(buf, buffer_u16, netID);
+	var n = array_length(packet);
+	for (var i = 1; i < n; i++) {
+		var data = packet[i];
+		var val = data[0];
+		var type = data[1];
+		if (type == pointer_null || type == undefined && val != undefined) type = __gnType(val);
+		if (val == undefined) type = undefined;
+		buffer_write(buf, buffer_u8, _gn.typeMap[? type]);
+		if (type == undefined) {
+			continue;                                     // nothing follows the type byte
+		} else if (type == buffer_array) {
+			var m = array_length(val);
+			if (m > __GN_MAX_ARRAY) throw ("gn: array of " + string(m) + " is over " + string(__GN_MAX_ARRAY));
+			buffer_write(buf, buffer_u8, m);
+			for (var k = 0; k < m; k++) buffer_write(buf, buffer_u8, val[k]);
+		} else if (type == buffer_string) {
+			// The length counts the NUL terminator, and the terminator is sent: that is what
+			// PROTOCOL.md specifies and what every decoder strips.
+			var strBuf = buffer_create(string_byte_length(val) + 1, buffer_fixed, 1);
+			buffer_write(strBuf, buffer_string, val);
+			var strLen = buffer_tell(strBuf);
+			if (strLen - 1 > __GN_MAX_STRING_BYTES) {
+				buffer_delete(strBuf);
+				buffer_delete(buf);
+				throw ("gn: string of " + string(strLen - 1) + " bytes is over " + string(__GN_MAX_STRING_BYTES));
+			}
+			buffer_write(buf, buffer_u16, strLen);
+			buffer_copy(strBuf, 0, strLen, buf, buffer_tell(buf));
+			buffer_seek(buf, buffer_seek_relative, strLen);
+			buffer_delete(strBuf);
+		} else if (type == buffer_f64 && is_nan(val)) {
+			// Canonical NaN, so every implementation sends the same eight bytes.
+			buffer_write(buf, buffer_u32, 0);
+			buffer_write(buf, buffer_u32, 0x7FF80000);
+		} else {
+			buffer_write(buf, type, val);
 		}
 	}
-
-	return [netID, data];
+	var bodySize = buffer_tell(buf);
+	if (bodySize > __GN_MAX_PAYLOAD) {
+		buffer_delete(buf);
+		throw ("gn: payload of " + string(bodySize) + " bytes is over " + string(__GN_MAX_PAYLOAD));
+	}
+	var out = buffer_create(bodySize + 2, buffer_fixed, 1);
+	buffer_write(out, buffer_u16, bodySize);
+	buffer_copy(buf, 0, bodySize, out, 2);
+	buffer_seek(out, buffer_seek_start, bodySize + 2);
+	buffer_delete(buf);
+	return out;
 }
 
 function __gnSendPacket(conn, packet) {
@@ -255,50 +358,10 @@ function __gnSendPacket(conn, packet) {
 		show_debug_message("[gn] dropped packet " + string(packet[0]) + " -- not connected");
 		return false;
 	}
-	var _gn = global.__gn;
-	var buf = buffer_create(1, buffer_grow, 1);
-	// write id
-	buffer_write(buf, buffer_u16, packet[0]);
-	// write data
-	var n = array_length(packet);
-	for (var i = 1; i < n; i++) {
-		var data = packet[i];
-		var type = data[1];
-		var val = data[0];
-		// write type to buffer
-		buffer_write(buf, buffer_u8, _gn.typeMap[? type]);
-		// write data to buffer
-		if (type == undefined) {
-			continue; // write nothing for undefined values
-		} else if (type == buffer_array) {
-			var m = array_length(val);
-			buffer_write(buf, buffer_u8, m);
-			for (var j = 0; j < m; j++) {
-				buffer_write(buf, buffer_u8, val[j]);
-			}
-		} else {
-			if (type == buffer_string) {
-				var strBuf = buffer_create(string_length(val)+1, buffer_grow, 1);
-				buffer_write(strBuf, buffer_text, val);
-				var strBufLen = buffer_tell(strBuf);
-				buffer_write(buf, buffer_u16, strBufLen);
-				buffer_delete(strBuf);
-				type = buffer_text;
-			}
-			buffer_write(buf, type, val);
-		}
-	}
-	var packetSize = buffer_tell(buf);
-	var sendBuf = buffer_create(packetSize+2, buffer_fixed, 1);
-	buffer_write(sendBuf, buffer_u16, packetSize);
-	buffer_copy(buf, 0, packetSize, sendBuf, 2);
-	buffer_seek(sendBuf, 0, packetSize+2);
-
-	var result = network_send_raw(conn.socket, sendBuf, packetSize+2);
-
-	buffer_delete(buf);
+	var sendBuf = __gnEncodePacket(packet);
+	var size = buffer_tell(sendBuf);
+	var result = network_send_raw(conn.socket, sendBuf, size);
 	buffer_delete(sendBuf);
-
 	return result;
 }
 
@@ -347,6 +410,9 @@ function __gnInitServer(sock, prt) {
 	return server;
 }
 
+/// @description The wire type for a value, by PROTOCOL.md's rules: the narrowest integer type
+/// that holds it, f32 up to the 2^24 magnitude where single precision is exact, f64 beyond
+/// and for every non-finite number. Integers outside u32/s32 throw; nothing is truncated.
 function __gnType(val) {
 	if (val == undefined) {
 		return undefined;
@@ -357,38 +423,23 @@ function __gnType(val) {
 	} else if (is_bool(val)) {
 		return buffer_u8;
 	}
-
+	if (is_nan(val) || is_infinity(val)) return buffer_f64;
 	if (round(val) == val) {
 		// integer
 		if (val < 0) {
-			// negatives must be signed. Exact two's-complement bounds: -128 fits s8 and -32768 fits
-			// s16; `abs(val) <= 127` sent each of those one size wider than necessary.
-			if (val >= -128) {
-				return buffer_s8;
-			}
-			if (val >= -32768) {
-				return buffer_s16;
-			}
+			if (val < __GN_MIN_S32) throw ("gn: integer " + string(val) + " is below s32");
+			if (val >= -128) return buffer_s8;
+			if (val >= -32768) return buffer_s16;
 			return buffer_s32;
-		} else {
-			// unsigned
-			if (val <= 255) {
-				return buffer_u8;
-			}
-			if (val <= 65535) {
-				return buffer_u16;
-			}
-			return buffer_u32;
 		}
-	} else {
-		// float
-		if (abs(val) <= 16777216) {
-			return buffer_f32;
-		}
-		return buffer_f64;
+		if (val > __GN_MAX_U32) throw ("gn: integer " + string(val) + " is above u32");
+		if (val <= 255) return buffer_u8;
+		if (val <= 65535) return buffer_u16;
+		return buffer_u32;
 	}
-
-	return buffer_s32;
+	// float
+	if (abs(val) <= __GN_F32_LIMIT) return buffer_f32;
+	return buffer_f64;
 }
 
 function __gnInitTypes() {

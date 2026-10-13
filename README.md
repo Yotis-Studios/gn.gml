@@ -13,7 +13,7 @@ Ganbatte engine) carry an identical `__gnSystem` and `gnAPI` and differ only in 
 where they point the handler macros at their own functions. Fix the library here, then update
 the embedded copies; do not fix it in a game.
 
-Version: `__GN_VERSION` in `__gnSystem` (1.1.0).
+Version: `__GN_VERSION` in `__gnSystem` (1.2.0).
 
 ## Configuration
 See _gnConfig. The `GN_HANDLER_*` macros name the functions called on connect, timeout,
@@ -22,11 +22,16 @@ disconnect, data and parse error; each may stay `undefined`.
 ## Wire format
 The byte format is specified by [gn.js](https://github.com/Yotis-Studios/gn.js) in
 `PROTOCOL.md`, with shared test vectors in `test/vectors/protocol.json` that gn.js and gn.hml
-run in CI. This client has no vector runner yet; known divergences from the spec are: strings
-are sent without a NUL terminator (decoders strip one, so this is wire-safe), an unknown type
-id decodes as `undefined` and parsing continues, integers above 4294967295 wrap to u32, NaN is
-not canonicalised, and a frame of size 0 or a frame longer than the data is parsed or awaited
-rather than discarded.
+run in CI. Since 1.2.0 this client runs them too (the Ganbatte engine's `gnvectors` flow),
+and follows the spec: strings carry their NUL and the length counts it, an unknown type id
+ends decoding, integers outside u32/s32 throw on encode, NaN is canonical, a zero-size frame
+ends the message. The one divergence kept on purpose: a size that runs past the end of what
+has arrived is carried to the next read rather than dropped, because GameMaker's socket may
+deliver a message in pieces where a WebSocket does not.
+
+`__gnEncodePacket(packet)` returns the encoded buffer (size header included) and throws on
+anything the spec says cannot be encoded; `__gnParsePacket(buf, size)` and
+`__gnParseFrames(buf, size)` are the decoder and the framer, bounds-checked against `size`.
 
 ## Behaviour worth knowing
 - Incoming data is a stream. Unconsumed bytes are carried to the next async event and a packet
