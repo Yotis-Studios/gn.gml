@@ -13,7 +13,7 @@ Ganbatte engine) carry an identical `__gnSystem` and `gnAPI` and differ only in 
 where they point the handler macros at their own functions. Fix the library here, then update
 the embedded copies; do not fix it in a game.
 
-Version: `__GN_VERSION` in `__gnSystem` (1.2.0).
+Version: `__GN_VERSION` in `__gnSystem` (1.2.1).
 
 ## Configuration
 See _gnConfig. The `GN_HANDLER_*` macros name the functions called on connect, timeout,

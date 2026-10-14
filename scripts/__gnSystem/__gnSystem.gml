@@ -1,5 +1,5 @@
 // gn.gml client, internals. Public API is in gnAPI; configuration in __gnConfig.
-#macro __GN_VERSION "1.2.0"
+#macro __GN_VERSION "1.2.1"
 
 // Encoding limits from gn.js PROTOCOL.md. The encoder throws on anything outside them, which
 // is what the other implementations do; a value that cannot cross the wire is a programming
@@ -119,7 +119,9 @@ function __gnOnDisconnect(conn) {
 	// The socket id is dead once disconnected; keeping the entry leaked one struct per connection
 	// for the life of the process. A late async event for this id now lands in the unknown-socket
 	// guard in __gnAsync, which is the intended path.
-	ds_map_delete(_gn.connections, conn.socket);
+	// Guarded: a game that hosts the singleton in its own controller may shadow `connections`
+	// with a field of its own, and a disconnect then freed a map that was never gn's.
+	if (ds_exists(_gn.connections, ds_type_map)) ds_map_delete(_gn.connections, conn.socket);
 }
 
 function __gnOnError(message, ex) {
